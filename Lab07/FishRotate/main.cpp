@@ -43,32 +43,33 @@ public:
   bool frameStarted(const FrameEvent &evt)
   {
     // Fill Here ----------------------------------------------
-	  const Vector3 LookVector{ 0, 0, 1 };
-	  const float fMovingSpeed          = 100.f;
-	  const float fRotationSpeed        = 90.f;
-	  const float fTurningDegreeAmount  = fRotationSpeed * 2.f;
-	  const float fLimitDistance        = 250.f;
-	  const float fFrameTime            = evt.timeSinceLastFrame;
+	  static const Vector3 LookVector{ 0, 0, 1 };
+	  static const float fMovingSpeedPerSecond      = 100.f;
+	  static const float fRotationSpeedPerSecond    = 90.f;
+	  static const float fGoalTurningDegree         = 180.f;
+	  static const float fLimitDistance             = 250.f;
+	  const float fFrameTime = evt.timeSinceLastFrame;
 
 	  static bool bTurning              = false;
 	  static float fProfessorAccumAngle = 0.0f;
 	  static float fMovingDir           = 1.0f;
 	  
-	  float fFrameRotationDegree = fRotationSpeed * fFrameTime;
+	  float fFrameRotationDegree = fRotationSpeedPerSecond * fFrameTime;
+	  mFishRotationPivotNode->yaw(Degree(-fFrameRotationDegree));
 
 	  if (bTurning)
 	  {
 		  mProfessorNode->yaw(Degree(fFrameRotationDegree));
 		  fProfessorAccumAngle += fFrameRotationDegree;
 
-		  if (fProfessorAccumAngle >= fTurningDegreeAmount)
+		  if (fProfessorAccumAngle >= fGoalTurningDegree)
 		  {
 			  bTurning = false;
 		  }
 	  }
 	  else // false == bTurning
 	  {
-		  Vector3 vecVelocity = LookVector * fMovingDir * fFrameTime * fRotationSpeed;
+		  Vector3 vecVelocity = LookVector * fMovingDir * fFrameTime * fMovingSpeedPerSecond;
 		  mProfessorNode->translate(vecVelocity);
 		  
 		  Vector3 vecPos = mProfessorNode->getPosition();
@@ -83,7 +84,7 @@ public:
 			  fProfessorAccumAngle = 0.0f;
 		  }
 	  }
-	  mFishRotationPivotNode->yaw(Degree(-1 * fFrameRotationDegree));
+
 
     //-----------------------------------------------------------
     return true;
@@ -176,6 +177,7 @@ public:
 	Entity* entity2 = mSceneMgr->createEntity("Fish", "fish.mesh");
     SceneNode* node2 = pivotNode->createChildSceneNode("Fish", Vector3(100.0f, 0.0f, 0.0f));
 	node2->yaw(Degree(90.f));
+	//node2->
 	node2->attachObject(entity2);
 	node2->scale(10, 10, 10);
 
@@ -184,7 +186,6 @@ public:
 
     mMainListener = new MainListener(mRoot, mKeyboard);
     mRoot->addFrameListener(mMainListener);
-
 
     mRoot->startRendering();
 

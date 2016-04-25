@@ -38,8 +38,6 @@ public:
 
 		keyboard->setEventCallback(this);
 		mouse->setEventCallback(this);
-
-
 	}
 
 
@@ -54,7 +52,7 @@ public:
 		{
 			static const float ROTATION_TIME = 0.3f;
 			mRotatingTime = (mRotatingTime > ROTATION_TIME) ? ROTATION_TIME : mRotatingTime;
-			Quaternion delta = Quaternion::Slerp(mRotatingTime / ROTATION_TIME, mSrcQuat, mDestQuat, true);
+			const Quaternion delta = Quaternion::Slerp(mRotatingTime / ROTATION_TIME, mSrcQuat, mDestQuat, true);
 
 			mProfessorNode->setOrientation(delta);
 			if (mRotatingTime >= ROTATION_TIME)
@@ -68,11 +66,11 @@ public:
 		}
 		else if (mWalking)
 		{
+			static const float moveSpeed = 100.f;
+
 			Vector3 dirVector = mProfessorVelocity;
 			dirVector.normalise();
 
-			static const float moveSpeed = 50.f;
-			Vector3 pos = mProfessorNode->getPosition();
 			mProfessorNode->translate(dirVector * moveSpeed * evt.timeSinceLastFrame );
 
 			Quaternion rot = Vector3(Vector3::UNIT_Z).getRotationTo(dirVector);
@@ -273,14 +271,14 @@ public:
 
 	bool frameStarted(const FrameEvent &evt)
 	{
-		//if (false == mTracing)
+		if (false == mTracing)
 		{
-			Vector3 professorPos = mProfessorNode->getPosition();
-			Vector3 ninPos = mNinjaNode->getPosition();
+			const Vector3 professorPos = mProfessorNode->getPosition();
+			const Vector3 ninPos = mNinjaNode->getPosition();
 			if (ninPos.distance(professorPos) < 150.f)
 			{
 				mTracing = true;
-				mDestination = ninPos;
+				//mDestination = professorPos;
 				nextLocation();
 			}
 		}

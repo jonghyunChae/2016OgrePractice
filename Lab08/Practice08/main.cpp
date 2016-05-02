@@ -7,12 +7,14 @@
 
 #include <Ogre.h>
 #include <OIS/OIS.h>
+#include <iostream>
+#include <map>
 
+using namespace std;
 using namespace Ogre;
 
 class AnimationObject
 {
-	//const char IDLE_STATE = { "idle" };
 public:
 	AnimationObject()
 	{
@@ -23,31 +25,46 @@ public:
 		mRotatingTime   = 0.f;
 
 		mDirVector = mVelocity = Vector3::ZERO;
+		mTargetPos = Vector3::ZERO;
 		mSpeed          = 0.f;
+		mTargetDistance = 0.f;
 
 		mSrcQuat        = Quaternion::ZERO;
 		mDestQuat       = Quaternion::ZERO;
+
+		mBasicLookVector = Vector3::UNIT_Z;
 	}
+
 	~AnimationObject()
 	{
 	}
+
+	Vector3 getPosition() { return mNode->getPosition(); }
+
+	void basicRotate(Vector3 & toLook)
+	{
+		Quaternion rot = Vector3::UNIT_Z.getRotationTo(toLook);
+		mNode->rotate(rot);
+		mBasicLookVector = rot.zAxis();
+	}
+
+	bool isMovingToPoint() { return mTargetDistance > 0.f; }
+	void setIdleAnim(const char * name) { mAnimList[eIDLE] = string(name); }
+	void setWalkAnim(const char * name) { mAnimList[eWALKING] = string(name); }
 	void setSpeed(float speed) { mSpeed = speed; }
-	void setData(Root * root, const char * objName, const char * initAnimState)
+	void setData(Root * root, const char * objName, const char * initAnimState, char * initWalkState)
 	{
 		mNode   = root->getSceneManager("main")->getSceneNode(objName);
 		mEntity = root->getSceneManager("main")->getEntity(objName);
+		setIdleAnim(initAnimState);
+		setWalkAnim(initWalkState);
+
 		mAnimationState = mEntity->getAnimationState(initAnimState);
 		mAnimationState->setLoop(true);
 		mAnimationState->setEnabled(true);
-<<<<<<< HEAD
-=======
-
-		keyboard->setEventCallback(this);
-		mouse->setEventCallback(this);
->>>>>>> 32ac71c3fa1dedeb17e4dd0e381afae2666c8d70
 	}
 
-	void setAnimation(const char * name)
+	void setAnimation(string name)
 	{
 		mAnimationState->setEnabled(false);
 		mAnimationState = mEntity->getAnimationState(name);//("Walk");
@@ -59,18 +76,36 @@ public:
 	{
 		Vector3 before = mVelocity;
 		mVelocity += addVelocity;
+		
 		Vector3 after = mVelocity;
 		after.normalise();
 		mDirVector = after;
-		changeState(before, mVelocity);
+		changeState(before, mDirVector);
+
+		mTargetDistance = 0.f;
+	}
+
+	void moveToPoint(const Vector3 & pos)
+	{
+		mTargetPos = pos;
+		Vector3 mypos = mNode->getPosition();
+		Vector3 Direction = mTargetPos - mypos;
+		mTargetDistance = Direction.normalise();
+
+		changeState(mDirVector, Direction);
+		mDirVector = Direction;
+		mVelocity = Vector3::ZERO;
 	}
 
 	void update(float frameTime)
 	{
+		mAnimationState->addTime(frameTime);
+
 		if (mState == eROTATING)
 		{
 			static const float ROTATION_TIME = 0.3f;
 			mRotatingTime = (mRotatingTime > ROTATION_TIME) ? ROTATION_TIME : mRotatingTime;
+			mRotatingTime += frameTime;
 			const Quaternion delta = Quaternion::Slerp(mRotatingTime / ROTATION_TIME, mSrcQuat, mDestQuat, true);
 
 			mNode->setOrientation(delta);
@@ -80,40 +115,38 @@ public:
 				mState = eWALKING;
 				mNode->setOrientation(mDestQuat);
 			}
-			else
-				mRotatingTime += frameTime;
 		}
 		else if (mState == eWALKING)
 		{
-<<<<<<< HEAD
+			if (isMovingToPoint())
+			{
+				mTargetDistance -= mSpeed * frameTime;
+				if (mTargetDistance < 0.1f)
+				{
+					mNode->setPosition(mTargetPos);
+					mTargetDistance = 0.f;
+					return;
+				}
+			}
 			mNode->translate(mDirVector * mSpeed * frameTime);
 
-			Quaternion rot = Vector3(Vector3::UNIT_Z).getRotationTo(mDirVector);
+			Quaternion rot = mBasicLookVector.getRotationTo(mDirVector);
 			mNode->setOrientation(rot);
 		}
-		mAnimationState->addTime(frameTime);
 	}
-=======
-			static const float moveSpeed = 100.f;
-
-			Vector3 dirVector = mProfessorVelocity;
-			dirVector.normalise();
-
-			mProfessorNode->translate(dirVector * moveSpeed * evt.timeSinceLastFrame );
->>>>>>> 32ac71c3fa1dedeb17e4dd0e381afae2666c8d70
 
 	bool changeState(Vector3 & before, Vector3 & afterVelocity)
 	{
 		if (afterVelocity == Vector3::ZERO)
 		{
 			mState = eIDLE;
-			setAnimation("Idle");
+			setAnimation(mAnimList[eIDLE]);
 			return false;
 		}
 		else
 		{
 			mState = eWALKING;
-			setAnimation("Walk");
+			setAnimation(mAnimList[eWALKING]);
 		}
 
 		Vector3 MoveDir = afterVelocity;
@@ -122,10 +155,11 @@ public:
 		Vector3 Before = before;
 		Before.normalise();
 
-		if (Before == MoveDir) return false;
+		if (Before == MoveDir) 
+			return false;
 
 		mSrcQuat = mNode->getOrientation();
-		mDestQuat = Vector3(Vector3::UNIT_Z).getRotationTo(MoveDir);
+		mDestQuat = mBasicLookVector.getRotationTo(MoveDir);
 
 		mState = eROTATING;
 		mRotatingTime = 0.f;
@@ -137,7 +171,6 @@ private:
 	Entity * mEntity;
 	AnimationState* mAnimationState;
 
-
 	enum OBJ_STATE{ eNONE = -1, eIDLE, eWALKING, eROTATING};
 	OBJ_STATE mState;
 	float mRotatingTime;
@@ -145,7 +178,15 @@ private:
 	Vector3 mVelocity, mDirVector;
 	float mSpeed;
 	Quaternion mSrcQuat, mDestQuat;
+
+	float mTargetDistance;
+	Vector3 mTargetPos;
+
+	Vector3 mBasicLookVector;
+
+	std::map<OBJ_STATE, string> mAnimList;
 };
+
 
 class InputController : public FrameListener,
 	public OIS::KeyListener,
@@ -156,8 +197,10 @@ public:
 	InputController(Root* root, OIS::Keyboard *keyboard, OIS::Mouse *mouse) : mRoot(root), mKeyboard(keyboard), mMouse(mouse)
 	{
 		mProfessor = new AnimationObject();
-		mProfessor->setData(root, "Professor", "Idle");
-		mProfessor->setSpeed(50.f);
+		mProfessor->setData(root, "Professor", "Idle", "Walk");
+		mProfessor->setSpeed(100.f);
+
+		mCameraMoveVector = Vector3::ZERO;
 
 		mCamera = mRoot->getSceneManager("main")->getCamera("main");
 
@@ -192,18 +235,10 @@ public:
 		case OIS::KC_A: mCameraMoveVector.x -= 1; break;
 		case OIS::KC_D: mCameraMoveVector.x += 1; break;
 		
-		case OIS::KC_LEFT:  
-			mProfessor->move(-Vector3::UNIT_X);
-			break;
-		case OIS::KC_RIGHT: 
-			mProfessor->move(Vector3::UNIT_X);
-			break;
-		case OIS::KC_UP:    
-			mProfessor->move(-Vector3::UNIT_Z);
-			break;
-		case OIS::KC_DOWN:  
-			mProfessor->move(Vector3::UNIT_Z);
-			break;
+		case OIS::KC_LEFT:  mProfessor->move(-Vector3::UNIT_X); break;
+		case OIS::KC_RIGHT: mProfessor->move(Vector3::UNIT_X);  break;
+		case OIS::KC_UP:    mProfessor->move(-Vector3::UNIT_Z); break;
+		case OIS::KC_DOWN:  mProfessor->move(Vector3::UNIT_Z);  break;
 		
 		case OIS::KC_ESCAPE: mContinue = false; break;
 		}
@@ -220,24 +255,16 @@ public:
 		case OIS::KC_A: mCameraMoveVector.x += 1; break;
 		case OIS::KC_D: mCameraMoveVector.x -= 1; break;
 
-		case OIS::KC_LEFT:
-			mProfessor->move(Vector3::UNIT_X);
-			break;
-		case OIS::KC_RIGHT:
-			mProfessor->move(-Vector3::UNIT_X);
-			break;
-		case OIS::KC_UP:
-			mProfessor->move(Vector3::UNIT_Z);
-			break;
-		case OIS::KC_DOWN:
-			mProfessor->move(-Vector3::UNIT_Z);
-			break;
+		case OIS::KC_LEFT:  mProfessor->move(Vector3::UNIT_X);   break;
+		case OIS::KC_RIGHT: mProfessor->move(-Vector3::UNIT_X);  break;
+		case OIS::KC_UP:    mProfessor->move(Vector3::UNIT_Z);   break;
+		case OIS::KC_DOWN:  mProfessor->move(-Vector3::UNIT_Z);  break;
+
 		case OIS::KC_ESCAPE: mContinue = false; break;
 		}
 
 		return true;
 	}
-
 
 	// Mouse Listener Interface Implementation
 
@@ -275,91 +302,36 @@ private:
 	Ogre::Vector3 mCameraMoveVector;
 };
 
-class ProfessorController : public FrameListener
+class NinjaController : public FrameListener
 {
 
 public:
-	ProfessorController(Root* root)
+	NinjaController(Root* root)
 	{
 		mProfessorNode = root->getSceneManager("main")->getSceneNode("Professor");
-		mNinjaNode = root->getSceneManager("main")->getSceneNode("Ninja");
-		mProfessorEntity = root->getSceneManager("main")->getEntity("Professor");
-		mNinjaEntity = root->getSceneManager("main")->getEntity("Ninja");
 
-		mWalkSpeed = 120.0f;
-		mDirection = Vector3::ZERO;
-		mRotating = false;
-		mTracing = false;
+		mNinja = new AnimationObject();
+		mNinja->setData(root, "Ninja", "Walk", "Walk");
+		mNinja->basicRotate(-Vector3::UNIT_Z);
+		mNinja->setSpeed(80.f);
 
-		mAnimationState = mNinjaEntity->getAnimationState("Walk");
-		mAnimationState->setLoop(true);
-		mAnimationState->setEnabled(true);
+		mWalkList.push_back(randomVector());
 
-		mWalkList.push_back(Vector3(250.0f, 0.0f, 250.0f));
-		mWalkList.push_back(Vector3(250.0f, 0.0f, -250.0f));
-		mWalkList.push_back(Vector3(-250.0f, 0.0f, -250.0f));
-		mWalkList.push_back(Vector3(-250.0f, 0.0f, 250.f));
+		nextLocation();
 	}
 
 	bool frameStarted(const FrameEvent &evt)
 	{
-		if (false == mTracing)
+		mNinja->update(evt.timeSinceLastFrame);
+		Vector3 professorPos = mProfessorNode->getPosition();
+		if (mNinja->getPosition().distance(professorPos) < 100.f)
 		{
-			const Vector3 professorPos = mProfessorNode->getPosition();
-			const Vector3 ninPos = mNinjaNode->getPosition();
-			if (ninPos.distance(professorPos) < 150.f)
-			{
-				mTracing = true;
-				//mDestination = professorPos;
-				nextLocation();
-			}
+			mNinja->moveToPoint(professorPos);
 		}
-		if (mDirection == Vector3::ZERO)
+		else if (false == mNinja->isMovingToPoint())
 		{
-			if (nextLocation())
-			{
-				mAnimationState = mNinjaEntity->getAnimationState("Walk");
-				mAnimationState->setLoop(true);
-				mAnimationState->setEnabled(true);
-			}
+			nextLocation();
 		}
-		// Fill Here ===============================================================
-		else if (mRotating)
-		{
-			static const float ROTATION_TIME = 0.3f;
-			mRotatingTime = (mRotatingTime > ROTATION_TIME) ? ROTATION_TIME : mRotatingTime;
-			Quaternion delta = Quaternion::Slerp(mRotatingTime / ROTATION_TIME, mSrcQuat, mDestQuat, true);
-
-			mNinjaNode->setOrientation(delta);
-			if (mRotatingTime >= ROTATION_TIME)
-			{
-				mRotatingTime = 0.f;
-				mRotating = false;
-				mNinjaNode->setOrientation(mDestQuat);
-			}
-			else
-				mRotatingTime += evt.timeSinceLastFrame;
-		}
-
-		// ==========================================================================
-		else
-		{
-			Real move = mWalkSpeed * evt.timeSinceLastFrame; // 이동량 계산
-			mDistance -= move; // 남은 거리 계산
-			if (mDistance <= 0.0f)
-			{ // 목표 지점에 다 왔으면…
-				mNinjaNode->setPosition(mDestination); // 목표 지점에 캐릭터를 위치
-				mDirection = Vector3::ZERO; // 정지 상태로 들어간다.
-				nextLocation();
-			}
-			else
-			{
-				mNinjaNode->translate(mDirection * move);
-			}
-		}
-
-		mAnimationState->addTime(evt.timeSinceLastFrame);
-
 		return true;
 	}
 
@@ -367,47 +339,23 @@ public:
 	{
 		if (mWalkList.empty())  // 더 이상 목표 지점이 없으면 false 리턴
 			return false;
-		
-		if (false == mTracing)
-		{
-			mDestination = mWalkList.front(); // 큐의 가장 앞에서 꺼내기
-			mWalkList.pop_front(); // 가장 앞 포인트를 제거
-			mWalkList.push_back(mDestination);
-			mDirection = mDestination - mNinjaNode->getPosition(); // 방향 계산
-			mDistance = mDirection.normalise(); // 거리 계산
-		}
-		else
-		{
-			mWalkList.clear();
-			Vector3 targetPos = mProfessorNode->getPosition();
-			mDestination = targetPos;
-			mWalkList.push_back(mDestination);
-			mDirection = targetPos - mNinjaNode->getPosition();
-			mDistance = mDirection.normalise();
-		}
-		mSrcQuat = mNinjaNode->getOrientation();
-		// getRotationTo : 회전양을 구함
-		mDestQuat = Vector3(-Vector3::UNIT_Z).getRotationTo(mDirection);
-		mRotating = true;
-		mRotatingTime = 0.f;
+
+		Vector3 mDest = mWalkList.front();
+		mWalkList.pop_front();
+		mNinja->moveToPoint(mDest);
+		mWalkList.push_back(randomVector());
 		return true;
 	}
 
+	Vector3 randomVector()
+	{
+		return Vector3(rand() % 500 - 250, 0.f, rand() % 500 - 250);
+	}
+
 private:
-	SceneNode *mProfessorNode, *mNinjaNode;
-	Ogre::Entity *mProfessorEntity, *mNinjaEntity;
-	Ogre::AnimationState* mAnimationState;
-
 	std::deque<Vector3> mWalkList;
-	Real mWalkSpeed;
-	Vector3 mDirection;
-	Real mDistance;
-	Vector3 mDestination;
-
-	bool mTracing;
-	bool mRotating;
-	float mRotatingTime;
-	Quaternion mSrcQuat, mDestQuat;
+	AnimationObject * mNinja;
+	SceneNode * mProfessorNode;
 };
 
 
@@ -505,8 +453,7 @@ public:
 		InputController* inputController = new InputController(mRoot, mKeyboard, mMouse);
 		mRoot->addFrameListener(inputController);
 
-
-		ProfessorController* professorController = new ProfessorController(mRoot);
+		NinjaController* professorController = new NinjaController(mRoot);
 		mRoot->addFrameListener(professorController);
 
 		mRoot->startRendering();

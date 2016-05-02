@@ -8,8 +8,129 @@
 #include <Ogre.h>
 #include <OIS/OIS.h>
 
-
 using namespace Ogre;
+
+class AnimationObject
+{
+	//const char IDLE_STATE = { "idle" };
+public:
+	AnimationObject()
+	{
+		mNode           = nullptr;
+		mEntity         = nullptr;
+		mAnimationState = nullptr;
+		mState          = eNONE;
+		mRotatingTime   = 0.f;
+
+		mDirVector = mVelocity = Vector3::ZERO;
+		mSpeed          = 0.f;
+
+		mSrcQuat        = Quaternion::ZERO;
+		mDestQuat       = Quaternion::ZERO;
+	}
+	~AnimationObject()
+	{
+	}
+	void setSpeed(float speed) { mSpeed = speed; }
+	void setData(Root * root, const char * objName, const char * initAnimState)
+	{
+		mNode   = root->getSceneManager("main")->getSceneNode(objName);
+		mEntity = root->getSceneManager("main")->getEntity(objName);
+		mAnimationState = mEntity->getAnimationState(initAnimState);
+		mAnimationState->setLoop(true);
+		mAnimationState->setEnabled(true);
+	}
+
+	void setAnimation(const char * name)
+	{
+		mAnimationState->setEnabled(false);
+		mAnimationState = mEntity->getAnimationState(name);//("Walk");
+		mAnimationState->setLoop(true);
+		mAnimationState->setEnabled(true);
+	}
+
+	void move(const Vector3 & addVelocity)
+	{
+		Vector3 before = mVelocity;
+		mVelocity += addVelocity;
+		Vector3 after = mVelocity;
+		after.normalise();
+		mDirVector = after;
+		changeState(before, mVelocity);
+	}
+
+	void update(float frameTime)
+	{
+		if (mState == eROTATING)
+		{
+			static const float ROTATION_TIME = 0.3f;
+			mRotatingTime = (mRotatingTime > ROTATION_TIME) ? ROTATION_TIME : mRotatingTime;
+			Quaternion delta = Quaternion::Slerp(mRotatingTime / ROTATION_TIME, mSrcQuat, mDestQuat, true);
+
+			mNode->setOrientation(delta);
+			if (mRotatingTime >= ROTATION_TIME)
+			{
+				mRotatingTime = 0.f;
+				mState = eWALKING;
+				mNode->setOrientation(mDestQuat);
+			}
+			else
+				mRotatingTime += frameTime;
+		}
+		else if (mState == eWALKING)
+		{
+			mNode->translate(mDirVector * mSpeed * frameTime);
+
+			Quaternion rot = Vector3(Vector3::UNIT_Z).getRotationTo(mDirVector);
+			mNode->setOrientation(rot);
+		}
+		mAnimationState->addTime(frameTime);
+	}
+
+	bool changeState(Vector3 & before, Vector3 & afterVelocity)
+	{
+		if (afterVelocity == Vector3::ZERO)
+		{
+			mState = eIDLE;
+			setAnimation("Idle");
+			return false;
+		}
+		else
+		{
+			mState = eWALKING;
+			setAnimation("Walk");
+		}
+
+		Vector3 MoveDir = afterVelocity;
+		MoveDir.normalise();
+
+		Vector3 Before = before;
+		Before.normalise();
+
+		if (Before == MoveDir) return false;
+
+		mSrcQuat = mNode->getOrientation();
+		mDestQuat = Vector3(Vector3::UNIT_Z).getRotationTo(MoveDir);
+
+		mState = eROTATING;
+		mRotatingTime = 0.f;
+		return true;
+	}
+
+private:
+	SceneNode * mNode;
+	Entity * mEntity;
+	AnimationState* mAnimationState;
+
+
+	enum OBJ_STATE{ eNONE = -1, eIDLE, eWALKING, eROTATING};
+	OBJ_STATE mState;
+	float mRotatingTime;
+	
+	Vector3 mVelocity, mDirVector;
+	float mSpeed;
+	Quaternion mSrcQuat, mDestQuat;
+};
 
 class InputController : public FrameListener,
 	public OIS::KeyListener,
@@ -19,29 +140,19 @@ class InputController : public FrameListener,
 public:
 	InputController(Root* root, OIS::Keyboard *keyboard, OIS::Mouse *mouse) : mRoot(root), mKeyboard(keyboard), mMouse(mouse)
 	{
-		mProfessorNode = root->getSceneManager("main")->getSceneNode("Professor");
-		mNinjaNode = root->getSceneManager("main")->getSceneNode("Ninja");
-		mProfessorEntity = root->getSceneManager("main")->getEntity("Professor");
-		mNinjaEntity = root->getSceneManager("main")->getEntity("Ninja");
+		mProfessor = new AnimationObject();
+		mProfessor->setData(root, "Professor", "Idle");
+		mProfessor->setSpeed(50.f);
 
 		mCamera = mRoot->getSceneManager("main")->getCamera("main");
-		mProfessorVelocity = mCameraMoveVector = Ogre::Vector3::ZERO;
-
-		mContinue = true;
-		mRotating = false;
-		mWalking = false;
-		mRotatingTime = 0.f;
-
-		mAnimationState = mProfessorEntity->getAnimationState("Idle");
-		mAnimationState->setLoop(true);
-		mAnimationState->setEnabled(true);
 
 		keyboard->setEventCallback(this);
 		mouse->setEventCallback(this);
-
-
 	}
-
+	~InputController()
+	{
+		if (mProfessor) delete mProfessor;
+	}
 
 	bool frameStarted(const FrameEvent &evt)
 	{
@@ -50,36 +161,8 @@ public:
 
 		mCamera->moveRelative(mCameraMoveVector);
 
-		if (mRotating)
-		{
-			static const float ROTATION_TIME = 0.3f;
-			mRotatingTime = (mRotatingTime > ROTATION_TIME) ? ROTATION_TIME : mRotatingTime;
-			Quaternion delta = Quaternion::Slerp(mRotatingTime / ROTATION_TIME, mSrcQuat, mDestQuat, true);
+		mProfessor->update(evt.timeSinceLastFrame);
 
-			mProfessorNode->setOrientation(delta);
-			if (mRotatingTime >= ROTATION_TIME)
-			{
-				mRotatingTime = 0.f;
-				mRotating = false;
-				mProfessorNode->setOrientation(mDestQuat);
-			}
-			else
-				mRotatingTime += evt.timeSinceLastFrame;
-		}
-		else if (mWalking)
-		{
-			Vector3 dirVector = mProfessorVelocity;
-			dirVector.normalise();
-
-			static const float moveSpeed = 50.f;
-			Vector3 pos = mProfessorNode->getPosition();
-			mProfessorNode->translate(dirVector * moveSpeed * evt.timeSinceLastFrame );
-
-			Quaternion rot = Vector3(Vector3::UNIT_Z).getRotationTo(dirVector);
-			mProfessorNode->setOrientation(rot);
-		}
-
-		mAnimationState->addTime(evt.timeSinceLastFrame);
 		return mContinue;
 	}
 
@@ -87,8 +170,6 @@ public:
 
 	bool keyPressed(const OIS::KeyEvent &evt)
 	{
-		static Vector3 MoveDir = Vector3::ZERO;
-
 		switch (evt.key)
 		{
 		case OIS::KC_W: mCameraMoveVector.y += 1; break;
@@ -97,24 +178,16 @@ public:
 		case OIS::KC_D: mCameraMoveVector.x += 1; break;
 		
 		case OIS::KC_LEFT:  
-			MoveDir = mProfessorVelocity;
-			mProfessorVelocity.x -= 1;
-			changeState(MoveDir, mProfessorVelocity);
+			mProfessor->move(-Vector3::UNIT_X);
 			break;
 		case OIS::KC_RIGHT: 
-			MoveDir = mProfessorVelocity;
-			mProfessorVelocity.x += 1;
-			changeState(MoveDir, mProfessorVelocity);
+			mProfessor->move(Vector3::UNIT_X);
 			break;
 		case OIS::KC_UP:    
-			MoveDir = mProfessorVelocity;
-			mProfessorVelocity.z -= 1; 
-			changeState(MoveDir, mProfessorVelocity);
+			mProfessor->move(-Vector3::UNIT_Z);
 			break;
 		case OIS::KC_DOWN:  
-			MoveDir = mProfessorVelocity;
-			mProfessorVelocity.z += 1; 
-			changeState(MoveDir, mProfessorVelocity);
+			mProfessor->move(Vector3::UNIT_Z);
 			break;
 		
 		case OIS::KC_ESCAPE: mContinue = false; break;
@@ -125,8 +198,6 @@ public:
 
 	bool keyReleased(const OIS::KeyEvent &evt)
 	{
-		static Vector3 MoveDir = Vector3::ZERO;
-
 		switch (evt.key)
 		{
 		case OIS::KC_W: mCameraMoveVector.y -= 1; break;
@@ -135,24 +206,16 @@ public:
 		case OIS::KC_D: mCameraMoveVector.x -= 1; break;
 
 		case OIS::KC_LEFT:
-			MoveDir = mProfessorVelocity;
-			mProfessorVelocity.x += 1; 
-			changeState(MoveDir, mProfessorVelocity);
+			mProfessor->move(Vector3::UNIT_X);
 			break;
-		case OIS::KC_RIGHT: 
-			MoveDir = mProfessorVelocity;
-			mProfessorVelocity.x -= 1;
-			changeState(MoveDir, mProfessorVelocity);
+		case OIS::KC_RIGHT:
+			mProfessor->move(-Vector3::UNIT_X);
 			break;
-		case OIS::KC_UP:    
-			MoveDir = mProfessorVelocity;
-			mProfessorVelocity.z += 1; 
-			changeState(MoveDir, mProfessorVelocity);
+		case OIS::KC_UP:
+			mProfessor->move(Vector3::UNIT_Z);
 			break;
-		case OIS::KC_DOWN:  
-			MoveDir = mProfessorVelocity;
-			mProfessorVelocity.z -= 1; 
-			changeState(MoveDir, mProfessorVelocity);
+		case OIS::KC_DOWN:
+			mProfessor->move(-Vector3::UNIT_Z);
 			break;
 		case OIS::KC_ESCAPE: mContinue = false; break;
 		}
@@ -185,65 +248,17 @@ public:
 		return true;
 	}
 
-	bool changeState(Vector3 & before, Vector3 & afterVelocity)
-	{
-		if (afterVelocity == Vector3::ZERO)
-		{
-			mRotating = false;
-			mWalking = false;
-			SetAnimation("Idle");
-			return false;
-		}
-		else
-		{
-			mWalking = true;
-			SetAnimation("Walk");
-		}
-		Vector3 MoveDir = afterVelocity;
-		MoveDir.normalise();
-
-		Vector3 Before = before;
-		Before.normalise();
-		
-		if (Before == MoveDir) return false;
-
-		mSrcQuat = mProfessorNode->getOrientation();
-		mDestQuat = Vector3(Vector3::UNIT_Z).getRotationTo(MoveDir);
-		
-		mRotating = true;
-		mRotatingTime = 0.f;
-		return true;
-	}
-
-	void SetAnimation(char * name)
-	{
-		mAnimationState->setEnabled(false);
-		mAnimationState = mProfessorEntity->getAnimationState(name);//("Walk");
-		mAnimationState->setLoop(true);
-		mAnimationState->setEnabled(true);
-	}
-
 private:
+	AnimationObject * mProfessor;
+
 	bool mContinue;
 	Ogre::Root* mRoot;
 	OIS::Keyboard* mKeyboard;
 	OIS::Mouse* mMouse;
 	Camera* mCamera;
-	bool mRotating, mWalking;
-	float mRotatingTime;
 
-	int keyState;
-	const int keyUp = 1, keyDown = 2, keyLeft = 3, keyRight = 4;
-	Quaternion mDestQuat, mSrcQuat;
-
-	Ogre::Vector3 mCameraMoveVector, mProfessorVelocity;
-
-	SceneNode *mProfessorNode, *mNinjaNode;
-	Ogre::Entity *mProfessorEntity, *mNinjaEntity;
-	Ogre::AnimationState* mAnimationState;
+	Ogre::Vector3 mCameraMoveVector;
 };
-
-
 
 class ProfessorController : public FrameListener
 {

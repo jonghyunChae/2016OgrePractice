@@ -39,6 +39,12 @@ public:
 		mAnimationState = mEntity->getAnimationState(initAnimState);
 		mAnimationState->setLoop(true);
 		mAnimationState->setEnabled(true);
+<<<<<<< HEAD
+=======
+
+		keyboard->setEventCallback(this);
+		mouse->setEventCallback(this);
+>>>>>>> 32ac71c3fa1dedeb17e4dd0e381afae2666c8d70
 	}
 
 	void setAnimation(const char * name)
@@ -65,7 +71,7 @@ public:
 		{
 			static const float ROTATION_TIME = 0.3f;
 			mRotatingTime = (mRotatingTime > ROTATION_TIME) ? ROTATION_TIME : mRotatingTime;
-			Quaternion delta = Quaternion::Slerp(mRotatingTime / ROTATION_TIME, mSrcQuat, mDestQuat, true);
+			const Quaternion delta = Quaternion::Slerp(mRotatingTime / ROTATION_TIME, mSrcQuat, mDestQuat, true);
 
 			mNode->setOrientation(delta);
 			if (mRotatingTime >= ROTATION_TIME)
@@ -79,6 +85,7 @@ public:
 		}
 		else if (mState == eWALKING)
 		{
+<<<<<<< HEAD
 			mNode->translate(mDirVector * mSpeed * frameTime);
 
 			Quaternion rot = Vector3(Vector3::UNIT_Z).getRotationTo(mDirVector);
@@ -86,6 +93,14 @@ public:
 		}
 		mAnimationState->addTime(frameTime);
 	}
+=======
+			static const float moveSpeed = 100.f;
+
+			Vector3 dirVector = mProfessorVelocity;
+			dirVector.normalise();
+
+			mProfessorNode->translate(dirVector * moveSpeed * evt.timeSinceLastFrame );
+>>>>>>> 32ac71c3fa1dedeb17e4dd0e381afae2666c8d70
 
 	bool changeState(Vector3 & before, Vector3 & afterVelocity)
 	{
@@ -288,14 +303,14 @@ public:
 
 	bool frameStarted(const FrameEvent &evt)
 	{
-		//if (false == mTracing)
+		if (false == mTracing)
 		{
-			Vector3 professorPos = mProfessorNode->getPosition();
-			Vector3 ninPos = mNinjaNode->getPosition();
+			const Vector3 professorPos = mProfessorNode->getPosition();
+			const Vector3 ninPos = mNinjaNode->getPosition();
 			if (ninPos.distance(professorPos) < 150.f)
 			{
 				mTracing = true;
-				mDestination = ninPos;
+				//mDestination = professorPos;
 				nextLocation();
 			}
 		}

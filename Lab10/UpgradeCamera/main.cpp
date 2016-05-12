@@ -83,6 +83,13 @@ public:
 	}
 	else
 	{
+		if (!mIdleState->getEnabled())
+		{
+			mIdleState->setEnabled(true);
+			mRunState->setEnabled(false);
+		}
+		mIdleState->addTime(evt.timeSinceLastFrame);
+
 		if (offsetCamera.length() > 0)
 		{
 			const static float minLength = 10.f;
@@ -93,18 +100,11 @@ public:
 			}
 			else
 			{
-				Vector3 cameraMovDir = -1 * offsetCamera.normalisedCopy();
+				const Vector3 cameraMovDir = -1 * offsetCamera.normalisedCopy();
 				mCameraHolder->translate(cameraMovDir * cameraDragSpeed * evt.timeSinceLastFrame);
 				offsetCamera += cameraMovDir * cameraDragSpeed * evt.timeSinceLastFrame;
 			}
 		}
-
-		if (!mIdleState->getEnabled())
-		{
-			mIdleState->setEnabled(true);
-			mRunState->setEnabled(false);
-		}
-		mIdleState->addTime(evt.timeSinceLastFrame);
 	}
     return mContinue;
   }

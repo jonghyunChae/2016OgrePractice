@@ -1,5 +1,6 @@
 #include "OptionState.h"
 #include "TitleState.h"
+#include "PlayState.h"
 
 using namespace Ogre;
 
@@ -23,12 +24,7 @@ void OptionState::enter(void)
 
 void OptionState::exit(void)
 {
-	// Fill Here -----------------------------
-	mAnimationState->setEnabled(false);
-	mAnimationState = mCharacterEntity->getAnimationState("Run");
-	mAnimationState->setLoop(true);
-	mAnimationState->setEnabled(true);
-	// ---------------------------------------
+	PlayState::getInstance()->setAnimState(mAnimationState);
 }
 
 void OptionState::pause(void)

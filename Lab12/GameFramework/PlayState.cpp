@@ -52,10 +52,17 @@ void PlayState::exit(void)
 
 void PlayState::pause(void)
 {
+//	mAnimationState = mCharacterEntity->getA
+//	mAnimationState = mCharacterEntity->getAnimationState("Run");
+	mAnimationState->setLoop(false);
+	mAnimationState->setEnabled(false);
 }
 
 void PlayState::resume(void)
 {
+//	mAnimationState = mCharacterEntity->Anima`
+	mAnimationState->setLoop(true);
+	mAnimationState->setEnabled(true);
 }
 
 bool PlayState::frameStarted(GameManager* game, const FrameEvent& evt)

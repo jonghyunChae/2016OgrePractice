@@ -23,6 +23,8 @@ public:
 
   static PlayState* getInstance() { return &mPlayState; }
 
+  void setAnimState(Ogre::AnimationState* anim) { mAnimationState = anim; }
+
 private:
 
   void _setLights(void);
